@@ -136,6 +136,17 @@ class BasslineGenerator(BaseGenerator):
             # Apply anti-dissonance post-processing
             generated = self._anti_dissonance_pass(generated, parsed_chords)
 
+            # Ensure all notes are in bass range (MIDI 28–59)
+            for track in generated.tracks:
+                for note in track.notes:
+                    if note.pitch >= 60:
+                        # Transpose down by octaves until in range
+                        while note.pitch >= 60:
+                            note.pitch -= 12
+                        note.pitch = max(28, note.pitch)
+                    elif note.pitch < 28:
+                        note.pitch = 28
+
             eval_result = evaluator.overall_score(
                 generated=generated,
                 target=context_piece or MidiPiece(),
@@ -301,7 +312,7 @@ class BasslineGenerator(BaseGenerator):
                 # Is it a passing tone? (step from previous/next)
                 # For simplicity, just snap if duration > 0.2s
                 if note.duration_seconds > 0.2:
-                    nearest = _nearest_chord_pitch(note.pitch, chord_pcs)
+                    nearest = _nearest_chord_pitch(note.pitch, chord_pcs, lo=28, hi=59)
                     note.pitch = nearest
 
         return piece
@@ -381,17 +392,22 @@ def _get_chord_pcs_at_time(
     return None
 
 
-def _nearest_chord_pitch(pitch: int, chord_pcs: list[int]) -> int:
-    """Find the MIDI pitch closest to *pitch* that belongs to *chord_pcs*."""
+def _nearest_chord_pitch(pitch: int, chord_pcs: list[int], lo: int = 28, hi: int = 59) -> int:
+    """Find the MIDI pitch closest to *pitch* that belongs to *chord_pcs* and stays in [lo, hi]."""
     best_pitch = pitch
-    best_dist = 13
+    best_dist = 200
     for pc in chord_pcs:
         for octave in range(8):
             candidate = pc + octave * 12
+            if candidate < lo or candidate > hi:
+                continue
             dist = abs(candidate - pitch)
             if dist < best_dist:
                 best_dist = dist
                 best_pitch = candidate
+    # If nothing found in range, fall back unconstrained but clamp
+    if best_dist == 200:
+        best_pitch = max(lo, min(hi, pitch))
     return best_pitch
 
 

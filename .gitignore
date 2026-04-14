@@ -1,3 +1,42 @@
+# Python
+venv/
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Environment / secrets
+.env
+.env.*
+
+# Model weights (large binary files)
+models/*.bin
+models/*.safetensors
+models/*.pt
+models/*.pth
+models/base_model/
+models/manifest.json
+
+# User data
+projects/
+logs/
+
+# Test artefacts
+.pytest_cache/
+.coverage
+htmlcov/
+*.xml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db

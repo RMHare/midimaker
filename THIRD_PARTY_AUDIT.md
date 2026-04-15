@@ -60,7 +60,7 @@
 | Dependency | Pinned Version | License | First Release Evidence | Usage Mode | Role |
 |------------|---------------|---------|----------------------|------------|------|
 | [torch](https://pypi.org/project/torch/) (PyTorch) | ≥2.1.0 | BSD-3-Clause | PyPI: 2018; v2.1.0: 2023-10 | unmodified | Tensor computation, model training/inference |
-| [transformers](https://pypi.org/project/transformers/) (HuggingFace) | ≥4.36.0 | Apache-2.0 | PyPI: 2019; v4.36.0: 2023-12 | wrapped | GPT-2 base model, generation utilities |
+| [transformers](https://pypi.org/project/transformers/) (HuggingFace) | ≥4.36.0 | Apache-2.0 | PyPI: 2019; v4.36.0: 2023-12 | wrapped | AMT model loading via GPT2LMHeadModel, generation utilities |
 | [peft](https://pypi.org/project/peft/) (HuggingFace PEFT) | ≥0.7.0 | Apache-2.0 | PyPI first upload: 2023-02-24; v0.7.0: 2023-11 | wrapped | LoRA adapter creation, injection, and serialisation |
 | [accelerate](https://pypi.org/project/accelerate/) | ≥0.25.0 | Apache-2.0 | PyPI: 2021; v0.25.0: 2023-12 | unmodified | Mixed-precision training, device placement |
 
@@ -110,7 +110,7 @@ These are research artefacts whose architectures or approaches are incorporated 
 
 | Name | Reference | Usage |
 |------|-----------|-------|
-| Anticipatory Music Transformer (AMT) | Wu & Smith, arXiv:2306.08620 (2023), Stanford | Infilling architecture design inspiration; the `InpaintingGenerator` implements a similar bidirectional conditioning scheme using our GPT-2 + MIDITok stack |
+| Anticipatory Music Transformer (AMT) | Wu & Smith, arXiv:2306.08620 (June 2023), Stanford | **Primary generation model.** The AMT checkpoint (or AMT-equivalent architecture) is the base model for all generation subsystems.  Its bidirectional conditioning scheme enables native MIDI infilling.  Loaded via HuggingFace `GPT2LMHeadModel` for PEFT/LoRA compatibility. |
 | GigaMIDI | Kosta et al., arXiv:2410.11029 (2024) | Training corpus curation methodology; we follow their filtering heuristics (note density, pitch range, key detectability) in `training/preprocessor.py` |
 | PEFT / LoRA | Hu et al., arXiv:2106.09685 (2021) | LoRA adapter design; implemented via the HuggingFace PEFT library |
 

@@ -214,13 +214,98 @@ class MotifAnalyzer:
     # ------------------------------------------------------------------
 
     def _describe_motif(self, notes: list[Note]) -> str:
+        """Build a rich plain-English description of a motif."""
         if len(notes) < 2:
             return "single-note motif"
+
         intervals = [notes[i + 1].pitch - notes[i].pitch for i in range(len(notes) - 1)]
-        direction = "rising" if sum(intervals) > 0 else "falling" if sum(intervals) < 0 else "stationary"
+        abs_intervals = [abs(iv) for iv in intervals]
         note_count = len(notes)
         duration = notes[-1].onset_seconds - notes[0].onset_seconds
-        return f"{direction} {note_count}-note figure (~{duration:.1f}s)"
+
+        # Direction
+        net = sum(intervals)
+        if net > 2:
+            direction = "ascending"
+        elif net < -2:
+            direction = "descending"
+        elif all(iv >= 0 for iv in intervals):
+            direction = "gently rising"
+        elif all(iv <= 0 for iv in intervals):
+            direction = "gently falling"
+        else:
+            direction = "wave-like"
+
+        # Contour shape
+        ups = sum(1 for iv in intervals if iv > 0)
+        downs = sum(1 for iv in intervals if iv < 0)
+        if ups > 0 and downs > 0:
+            if intervals[0] > 0 and intervals[-1] < 0:
+                contour = "arch-shaped"
+            elif intervals[0] < 0 and intervals[-1] > 0:
+                contour = "U-shaped"
+            else:
+                contour = "zigzag"
+        else:
+            contour = "straight"
+
+        # Interval character
+        max_interval = max(abs_intervals)
+        avg_interval = sum(abs_intervals) / len(abs_intervals)
+        if max_interval <= 2:
+            movement = "stepwise"
+        elif max_interval <= 5:
+            movement = "with small leaps"
+        elif max_interval <= 7:
+            movement = "with a melodic leap"
+        else:
+            movement = f"with a wide leap ({max_interval} semitones)"
+
+        # Rhythm character
+        durations = [n.duration_seconds for n in notes]
+        if durations:
+            avg_dur = sum(durations) / len(durations)
+            if avg_dur < 0.2:
+                rhythm = "rapid"
+            elif avg_dur < 0.4:
+                rhythm = "brisk"
+            elif avg_dur < 0.8:
+                rhythm = "moderate tempo"
+            else:
+                rhythm = "sustained"
+        else:
+            rhythm = ""
+
+        # Check for dotted rhythm (alternating long-short)
+        dotted = False
+        if len(durations) >= 3:
+            ratios = [durations[i + 1] / max(durations[i], 0.001) for i in range(len(durations) - 1)]
+            if any(r < 0.6 or r > 1.6 for r in ratios):
+                dotted = True
+
+        # Pitch range
+        pitches = [n.pitch for n in notes]
+        pitch_range = max(pitches) - min(pitches)
+        if pitch_range <= 4:
+            range_desc = "narrow range"
+        elif pitch_range <= 12:
+            range_desc = "moderate range"
+        else:
+            range_desc = f"spanning {pitch_range} semitones"
+
+        # Assemble
+        parts = [f"{direction} {note_count}-note figure"]
+        if contour != "straight":
+            parts.append(contour)
+        parts.append(movement)
+        if rhythm:
+            parts.append(rhythm)
+        if dotted:
+            parts.append("dotted rhythm")
+        parts.append(range_desc)
+        parts.append(f"~{duration:.1f}s")
+
+        return ", ".join(parts)
 
     def _get_melody_notes(self, piece: MidiPiece) -> list[Note]:
         """Return sorted melody notes; fall back to highest-pitch non-drum track."""

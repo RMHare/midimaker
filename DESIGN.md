@@ -8,7 +8,7 @@
 
 ## 1. Executive Summary
 
-MidiMaker is a local-first Windows 10 desktop application for symbolic music generation. It lets musicians compose, continue, inpaint, and personalise MIDI music through a PySide6 GUI backed by a small transformer model (GPT-2-small adapted to MIDI tokens), PEFT LoRA style packs, and an evolutionary training pipeline — all running entirely offline.
+MidiMaker is a local-first Windows 10 desktop application for symbolic music generation. It lets musicians compose, continue, inpaint, and personalise MIDI music through a PySide6 GUI backed by the **Anticipatory Music Transformer (AMT)** — a decoder-only transformer first published by Wu & Smith at Stanford in June 2023 (arXiv 2306.08620) — combined with PEFT LoRA style packs and an evolutionary training pipeline, all running entirely offline.
 
 ---
 
@@ -65,7 +65,7 @@ MidiMaker is a local-first Windows 10 desktop application for symbolic music gen
 
 ### 3.1 Generation Engine
 
-**Primary model:** GPT-2-small (124 M parameters) fine-tuned on a large MIDI token corpus (e.g., GigaMIDI-derived token sequences).  The base checkpoint is stored in `assets/base_model/`. LoRA adapters overlay style packs at inference time.
+**Primary model:** Anticipatory Music Transformer (AMT) — a decoder-only transformer (8 layers, 512-dim, 8 attention heads, ~25 M parameters) specifically designed for symbolic music infilling and continuation.  Published by Wu & Smith at Stanford in June 2023 (arXiv 2306.08620).  The checkpoint is stored in `assets/base_model/`.  Because AMT's architecture is parameter-compatible with HuggingFace's `GPT2LMHeadModel`, LoRA adapters overlay style packs at inference time via the standard PEFT library.
 
 **Tokenisation scheme (selectable):**  
 - Default: **REMI** (Relative Event-based MIDI representation) via MIDITok ≥3.0.  
@@ -98,7 +98,7 @@ MIDITok `REMITokenizer` wraps `MidiTokenizerWrapper` (adapters/midi_tokenizer.py
 ### 3.3 Style Adaptation (MIDI LoRA)
 
 **What is learned:**  
-A LoRA adapter (rank r=8, alpha=32) on the Q, V projection matrices of every attention layer in GPT-2-small.  Total trainable parameters ≈ 300 K — roughly 1.2 MB at float32.  The file also bundles:
+A LoRA adapter (rank r=8, alpha=32) on the Q, V projection matrices of every attention layer in the AMT model.  Total trainable parameters ≈ 150 K — roughly 0.6 MB at float32.  The file also bundles:
 - Token-level bias vectors for groove/velocity adjustment (≈32 KB)
 - A small learned linear head for bar-level energy prediction (≈4 KB)
 - Metadata JSON (creator, date, source MIDI count, evaluation scores)
@@ -322,7 +322,7 @@ These guards do **not** claim copyright-level originality; they are practical he
 
 ## 11. Known Limitations & Future Work
 
-- The base model (~124 M params) is modest; larger models (MusicGen-style) can be substituted by implementing a new `BaseGenerator` subclass.
+- The base model (~25 M params) is modest; larger models (MusicGen-style) can be substituted by implementing a new `BaseGenerator` subclass.
 - Expressive performance (timing humanisation, continuous controller curves) is out of scope for v0.1; only symbolic pitch/duration/velocity are generated.
 - Multi-track coherent generation (e.g., melody + bass + chords simultaneously) is planned for v0.3 via cross-track conditioning tokens.
 - Real-time playback requires a separate MIDI synthesizer (e.g., FluidSynth + soundfont); the app launches the user's default system MIDI device.

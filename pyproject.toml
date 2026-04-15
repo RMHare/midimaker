@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "midimaker"
+version = "0.1.0"
+description = "Local Symbolic Music Workstation — AI-assisted MIDI composition with style packs"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "MidiMaker Contributors" },
+]
+keywords = ["midi", "music", "ai", "generation", "composition", "transformer"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: MIDI",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "PySide6>=6.6.0",
+    "pretty_midi>=0.2.10",
+    "mido>=1.3.0",
+    "torch>=2.1.0",
+    "transformers>=4.36.0",
+    "peft>=0.7.0",
+    "accelerate>=0.25.0",
+    "numpy>=1.24.0",
+    "tqdm>=4.65.0",
+    "loguru>=0.7.0",
+    "pydantic>=2.4.0",
+]
+
+[project.scripts]
+midimaker = "app.main:main"
+
+[project.urls]
+Homepage = "https://github.com/your-org/midimaker"
+"Bug Tracker" = "https://github.com/your-org/midimaker/issues"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*", "core*", "generation*", "ranking*", "training*", "adapters*"]

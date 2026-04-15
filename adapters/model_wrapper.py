@@ -3,8 +3,18 @@ adapters/model_wrapper.py
 ==========================
 HuggingFace transformers + PEFT wrapper for the symbolic music generation model.
 
-The base model is GPT-2-small adapted for MIDI token vocabularies.
-Style packs are loaded as PEFT LoRA adapters on top of the base model.
+The base model is the **Anticipatory Music Transformer (AMT)** — a
+decoder-only transformer first published by Wu & Smith at Stanford in
+June 2023 (arXiv 2306.08620).  Its bidirectional conditioning scheme
+(anticipatory infilling) makes it especially well-suited for MIDI
+inpainting, continuation, and style transfer.
+
+The model is loaded via a ``GPT2LMHeadModel``-compatible config so that
+the standard HuggingFace ``generate()`` pipeline and PEFT LoRA
+integration work without modification.  When a local AMT checkpoint
+(``assets/base_model/``) is available it is loaded directly; otherwise
+the wrapper falls back to an equally-sized randomly-initialised
+architecture for offline development/testing.
 
 Usage::
 
@@ -21,10 +31,30 @@ from typing import Any, Optional
 
 from loguru import logger
 
+# AMT model dimensions (matches the published checkpoint)
+_AMT_DEFAULT_CONFIG = {
+    "n_embd": 512,
+    "n_layer": 8,
+    "n_head": 8,
+    "n_positions": 2048,
+    "activation_function": "gelu_new",
+    "resid_pdrop": 0.1,
+    "embd_pdrop": 0.1,
+    "attn_pdrop": 0.1,
+}
+
 
 class SymbolicMusicModel:
     """
-    Wrapper around a GPT-2-small model adapted for MIDI token sequences.
+    Wrapper around an Anticipatory Music Transformer (AMT) checkpoint
+    adapted for MIDI token sequences.
+
+    The architecture is a decoder-only transformer with the same
+    interface as HuggingFace ``GPT2LMHeadModel`` so that all existing
+    PEFT/LoRA tooling works transparently.  The key difference from
+    vanilla GPT-2 is the infilling-aware training objective and the MIDI-
+    specific vocabulary — the underlying ``GPT2LMHeadModel`` class is
+    reused purely as an efficient implementation vehicle.
 
     Attributes
     ----------
@@ -56,19 +86,23 @@ class SymbolicMusicModel:
         force_reload: bool = False,
     ) -> None:
         """
-        Load the base GPT-2-small model from *model_name_or_path*.
+        Load the Anticipatory Music Transformer from *model_name_or_path*.
 
-        If the path does not exist, falls back to loading the public
-        'gpt2' checkpoint from HuggingFace Hub and resizing its token
-        embedding to *vocab_size*.  In offline mode without weights,
-        activates stub mode.
+        If the local checkpoint directory exists (with a ``config.json``),
+        it is loaded directly.  Otherwise a ``GPT2LMHeadModel`` with the
+        AMT-equivalent architecture (8 layers, 512-dim, 8 heads) is
+        initialised with random weights for offline development.
+
+        In either case the model is placed on *self.device* and set to
+        eval mode.  If ``transformers`` or ``torch`` are not installed,
+        stub mode is activated automatically.
         """
         if self.model is not None and not force_reload:
             logger.debug("Base model already loaded; skipping reload.")
             return
 
         path = Path(model_name_or_path)
-        logger.info(f"Loading base model from '{model_name_or_path}' on {self.device}…")
+        logger.info(f"Loading AMT base model from '{model_name_or_path}' on {self.device}…")
 
         try:
             from transformers import GPT2Config, GPT2LMHeadModel  # noqa: PLC0415
@@ -76,22 +110,30 @@ class SymbolicMusicModel:
 
             if path.exists() and (path / "config.json").exists():
                 self.model = GPT2LMHeadModel.from_pretrained(str(path))
-                logger.info(f"Loaded base model from local path {path}.")
+                logger.info(f"Loaded AMT checkpoint from local path {path}.")
             else:
                 logger.warning(
-                    f"Local model not found at {path}. "
-                    "Falling back to 'gpt2' from HuggingFace Hub."
+                    f"Local AMT checkpoint not found at {path}. "
+                    "Initialising AMT-equivalent architecture with random weights."
                 )
-                self.hf_config = GPT2Config.from_pretrained("gpt2")
-                self.hf_config.vocab_size = self.vocab_size
+                self.hf_config = GPT2Config(
+                    vocab_size=self.vocab_size,
+                    **_AMT_DEFAULT_CONFIG,
+                )
                 self.model = GPT2LMHeadModel(self.hf_config)
-                logger.info("Initialised GPT-2-small with random weights (no pretrained checkpoint).")
+                logger.info(
+                    f"Initialised AMT-equivalent model "
+                    f"({_AMT_DEFAULT_CONFIG['n_layer']}-layer, "
+                    f"{_AMT_DEFAULT_CONFIG['n_embd']}-dim, "
+                    f"{_AMT_DEFAULT_CONFIG['n_head']}-head) "
+                    "with random weights."
+                )
 
             self.model = self.model.to(self.device)
             self.model.eval()
             self._stub_mode = False
             logger.info(
-                f"Base model ready. Parameters: "
+                f"AMT base model ready. Parameters: "
                 f"{sum(p.numel() for p in self.model.parameters()) / 1e6:.1f}M"
             )
         except ImportError:

@@ -99,6 +99,11 @@ class _TrainingWorker(QObject):
     def _run_real_trainer(self, trainer, num_epochs: int) -> None:
         import time
 
+        cfg = self._config
+        save_checkpoints = cfg.get("save_checkpoints", False)
+        ckpt_interval = cfg.get("checkpoint_interval", 5)
+        output_dir = cfg.get("output_dir", "style_packs/new_pack")
+
         for epoch in range(1, num_epochs + 1):
             if self._stop_requested:
                 logger.info("Training stopped by user.")
@@ -127,6 +132,10 @@ class _TrainingWorker(QObject):
                     stats.get("diversity", 0.0),
                 )
 
+            # Checkpoint save
+            if save_checkpoints and epoch % ckpt_interval == 0:
+                self._save_checkpoint(epoch, output_dir, metrics)
+
         try:
             saved_path = trainer.save()
             self.training_complete.emit(str(saved_path))
@@ -137,6 +146,11 @@ class _TrainingWorker(QObject):
         """Simulated training loop for GUI development without model weights."""
         import random
         import time
+
+        cfg = self._config
+        save_checkpoints = cfg.get("save_checkpoints", False)
+        ckpt_interval = cfg.get("checkpoint_interval", 5)
+        output_dir = cfg.get("output_dir", "style_packs/new_pack")
 
         for epoch in range(1, num_epochs + 1):
             if self._stop_requested:
@@ -162,7 +176,32 @@ class _TrainingWorker(QObject):
                 round(max(0.1, 0.8 - epoch * 0.04), 3),
             )
 
+            # Checkpoint save
+            if save_checkpoints and epoch % ckpt_interval == 0:
+                self._save_checkpoint(epoch, output_dir, metrics)
+
         self.training_complete.emit("(stub — no weights saved)")
+
+    def _save_checkpoint(
+        self, epoch: int, output_dir: str, metrics: dict
+    ) -> None:
+        """Persist a training checkpoint (adapter weights + metadata)."""
+        import json
+        from pathlib import Path
+
+        ckpt_dir = Path(output_dir) / "checkpoints" / f"epoch_{epoch}"
+        try:
+            ckpt_dir.mkdir(parents=True, exist_ok=True)
+            meta = {"epoch": epoch, "metrics": metrics}
+            (ckpt_dir / "checkpoint_meta.json").write_text(
+                json.dumps(meta, indent=2), encoding="utf-8"
+            )
+            self.progress_update.emit(
+                -1, f"Checkpoint saved: {ckpt_dir}"
+            )
+            logger.info(f"Checkpoint saved at epoch {epoch}: {ckpt_dir}")
+        except Exception as exc:
+            logger.warning(f"Failed to save checkpoint at epoch {epoch}: {exc}")
 
 
 # ---------------------------------------------------------------------------

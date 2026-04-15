@@ -235,6 +235,28 @@ class ReviewScreen(QWidget):
         apply_btn.clicked.connect(self._on_apply_feedback)
         layout.addWidget(apply_btn)
 
+        # Feedback timing toggle
+        self._deferred_chk = QCheckBox("Deferred feedback")
+        self._deferred_chk.setToolTip(
+            "When checked, ratings are collected but NOT applied to the style pack\n"
+            "until you explicitly click 'Apply Feedback'.\n"
+            "When unchecked (immediate mode), each rating is applied instantly."
+        )
+        self._deferred_chk.setChecked(True)
+        self._deferred_chk.setStyleSheet("QCheckBox { color: #ccc; }")
+        layout.addWidget(self._deferred_chk)
+
+        # Exclude bad generations
+        self._exclude_chk = QCheckBox("Exclude discarded items from future learning")
+        self._exclude_chk.setToolTip(
+            "When enabled, any item rated 'discard' or 'dislike' is\n"
+            "explicitly excluded from the next round of preference training,\n"
+            "preventing the model from ever learning from poor outputs."
+        )
+        self._exclude_chk.setChecked(True)
+        self._exclude_chk.setStyleSheet("QCheckBox { color: #ccc; }")
+        layout.addWidget(self._exclude_chk)
+
         self._feedback_status = QLabel("")
         self._feedback_status.setStyleSheet("color: #4caf50; font-weight: bold;")
         layout.addWidget(self._feedback_status)
@@ -299,12 +321,38 @@ class ReviewScreen(QWidget):
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
-        for label_text in ("A:", "B:"):
-            lbl = QLabel(f"<b>{label_text}</b>")
-            lbl.setStyleSheet("color: #ccc;")
-            layout.addWidget(lbl)
-            mini = MiniPianoRollWidget(width=260, height=60)
-            layout.addWidget(mini)
+        self._ab_mini_a = MiniPianoRollWidget(width=260, height=60)
+        self._ab_mini_b = MiniPianoRollWidget(width=260, height=60)
+
+        self._ab_label_a = QLabel("<b>A:</b>  (none)")
+        self._ab_label_a.setStyleSheet("color: #ccc;")
+        layout.addWidget(self._ab_label_a)
+        layout.addWidget(self._ab_mini_a)
+
+        self._ab_label_b = QLabel("<b>B:</b>  (none)")
+        self._ab_label_b.setStyleSheet("color: #ccc;")
+        layout.addWidget(self._ab_label_b)
+        layout.addWidget(self._ab_mini_b)
+
+        # Preference buttons
+        ab_btn_row = QHBoxLayout()
+        self._prefer_a_btn = QPushButton("👈  Prefer A")
+        self._prefer_a_btn.setToolTip("Mark A as better in this comparison.")
+        self._prefer_a_btn.setEnabled(False)
+        self._prefer_a_btn.clicked.connect(lambda: self._on_ab_prefer("A"))
+        ab_btn_row.addWidget(self._prefer_a_btn)
+
+        self._prefer_b_btn = QPushButton("Prefer B  👉")
+        self._prefer_b_btn.setToolTip("Mark B as better in this comparison.")
+        self._prefer_b_btn.setEnabled(False)
+        self._prefer_b_btn.clicked.connect(lambda: self._on_ab_prefer("B"))
+        ab_btn_row.addWidget(self._prefer_b_btn)
+        layout.addLayout(ab_btn_row)
+
+        self._ab_result_label = QLabel("")
+        self._ab_result_label.setStyleSheet("color: #4caf50; font-size: 11px; font-weight: bold;")
+        self._ab_result_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._ab_result_label)
 
         layout.addStretch()
         return group
@@ -338,11 +386,16 @@ class ReviewScreen(QWidget):
                 self, "No ratings", "Please rate some outputs before applying feedback."
             )
             return
+        excluded = 0
+        if self._exclude_chk.isChecked():
+            excluded = sum(1 for r in self._ratings.values() if r in ("dislike", "discard"))
         self._feedback_status.setText(
             f"✓ Feedback applied: {liked} liked, {disliked} disliked"
+            + (f", {excluded} excluded from learning" if excluded else "")
         )
         self._history_text.append(
             f"Applied feedback: {liked} positive, {disliked} negative ratings."
+            + (f" {excluded} excluded from future learning." if excluded else "")
         )
         self.feedback_applied.emit()
 
@@ -371,6 +424,10 @@ class ReviewScreen(QWidget):
     def _on_rating_changed(self, item_id: str, rating: str) -> None:
         self._ratings[item_id] = rating
         self._history_text.append(f"Item {item_id[:8]}… rated: {rating}")
+        # In immediate mode, auto-apply
+        if not self._deferred_chk.isChecked():
+            self._feedback_status.setText(f"✓ Immediately applied: {rating}")
+            self.feedback_applied.emit()
 
     # ------------------------------------------------------------------
     # Public
@@ -396,4 +453,56 @@ class ReviewScreen(QWidget):
         self._queue_layout.insertWidget(idx, card)
 
     def _on_ab_requested(self, item_id: str) -> None:
-        self._history_text.append(f"A/B compare requested for {item_id[:8]}…")
+        """Queue an item for A/B comparison; when two are queued, load both."""
+        if item_id in self._ab_selection:
+            return
+        self._ab_selection.append(item_id)
+
+        if len(self._ab_selection) == 1:
+            self._history_text.append(
+                f"A/B slot A: {item_id[:8]}…  — click A/B on another item for slot B."
+            )
+            # Load into A slot
+            data = self._find_item(item_id)
+            if data:
+                result = data.get("result")
+                self._ab_label_a.setText(f"<b>A:</b>  {item_id[:8]}…")
+                if result and hasattr(result, "midi_piece"):
+                    self._ab_mini_a.set_piece(result.midi_piece)
+
+        elif len(self._ab_selection) >= 2:
+            id_b = self._ab_selection[1]
+            self._history_text.append(
+                f"A/B slot B: {id_b[:8]}…  — comparing A vs B."
+            )
+            data = self._find_item(id_b)
+            if data:
+                result = data.get("result")
+                self._ab_label_b.setText(f"<b>B:</b>  {id_b[:8]}…")
+                if result and hasattr(result, "midi_piece"):
+                    self._ab_mini_b.set_piece(result.midi_piece)
+            self._prefer_a_btn.setEnabled(True)
+            self._prefer_b_btn.setEnabled(True)
+            self._ab_result_label.setText("")
+            # Reset selection for next pair
+            self._ab_selection = list(self._ab_selection[:2])
+
+    def _on_ab_prefer(self, choice: str) -> None:
+        """Record the user's A/B preference."""
+        self._ab_result_label.setText(f"✓ You preferred {choice}.")
+        self._history_text.append(f"A/B comparison result: preferred {choice}.")
+        if len(self._ab_selection) >= 2:
+            winner_id = self._ab_selection[0] if choice == "A" else self._ab_selection[1]
+            loser_id = self._ab_selection[1] if choice == "A" else self._ab_selection[0]
+            self._ratings[winner_id] = "like"
+            self._ratings[loser_id] = "dislike"
+        self._prefer_a_btn.setEnabled(False)
+        self._prefer_b_btn.setEnabled(False)
+        self._ab_selection.clear()
+
+    def _find_item(self, item_id: str) -> Optional[dict]:
+        """Look up an item dict by its ID."""
+        for data in self._items:
+            if data.get("id") == item_id:
+                return data
+        return None

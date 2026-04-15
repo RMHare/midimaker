@@ -33,6 +33,7 @@ from PySide6.QtGui import (
     QPainter,
     QPainterPath,
     QPen,
+    QShortcut,
     QWheelEvent,
 )
 from PySide6.QtWidgets import (
@@ -46,7 +47,6 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QPushButton,
     QScrollBar,
-    QShortcut,
     QSizePolicy,
     QSlider,
     QSplitter,
@@ -275,6 +275,17 @@ class PianoRollWidget(QWidget):
     def select_all(self) -> None:
         for n in self._notes:
             n.selected = True
+        self.update()
+
+    def set_velocity_for_selected(self, velocity: int) -> None:
+        """Set velocity on all selected notes."""
+        selected = [n for n in self._notes if n.selected]
+        if not selected:
+            return
+        self._push_undo()
+        for note in selected:
+            note.velocity = max(1, min(127, velocity))
+        self.notes_changed.emit()
         self.update()
 
     def delete_selected(self) -> None:
@@ -865,6 +876,29 @@ class PianoRollScreen(QWidget):
         self._note_count_label.setStyleSheet("color: #888; font-size: 11px;")
         layout.addWidget(self._note_count_label)
 
+        layout.addWidget(_sep())
+
+        # Velocity editor
+        vel_label = QLabel("Velocity:")
+        vel_label.setStyleSheet("color: #aaa;")
+        layout.addWidget(vel_label)
+
+        self._vel_slider = QSlider(Qt.Orientation.Horizontal)
+        self._vel_slider.setRange(1, 127)
+        self._vel_slider.setValue(80)
+        self._vel_slider.setFixedWidth(100)
+        self._vel_slider.setToolTip(
+            "Set velocity (loudness) for selected notes or newly drawn notes.\n"
+            "1 = pianissimo, 64 = mezzo-forte, 127 = fortissimo."
+        )
+        self._vel_slider.valueChanged.connect(self._on_velocity_changed)
+        layout.addWidget(self._vel_slider)
+
+        self._vel_value_label = QLabel("80")
+        self._vel_value_label.setFixedWidth(28)
+        self._vel_value_label.setStyleSheet("color: #aaa; font-size: 11px;")
+        layout.addWidget(self._vel_value_label)
+
         self.roll.notes_changed.connect(self._on_notes_changed)
 
         return bar
@@ -1018,6 +1052,11 @@ class PianoRollScreen(QWidget):
     def _on_notes_changed(self) -> None:
         n = len(self.roll.get_notes())
         self._note_count_label.setText(f"{n} note{'s' if n != 1 else ''}")
+
+    def _on_velocity_changed(self, value: int) -> None:
+        """Apply velocity to all selected notes and update the label."""
+        self._vel_value_label.setText(str(value))
+        self.roll.set_velocity_for_selected(value)
 
     def _on_load(self) -> None:
         path, _ = QFileDialog.getOpenFileName(

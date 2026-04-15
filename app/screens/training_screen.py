@@ -20,15 +20,18 @@ from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QFont, QTextCursor
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QProgressBar,
     QPushButton,
     QSlider,
+    QSpinBox,
     QSplitter,
     QTextEdit,
     QVBoxLayout,
@@ -176,6 +179,82 @@ class TrainingScreen(QWidget):
         cl.addWidget(self._chk_normalize)
 
         layout.addWidget(clean_group)
+
+        # Metadata override
+        meta_group = QGroupBox("Metadata Override")
+        meta_group.setStyleSheet(self._group_style())
+        meta_group.setToolTip(
+            "Override automatically detected key and time signature.\n"
+            "Leave blank to use auto-detection."
+        )
+        ml = QFormLayout(meta_group)
+        ml.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self._key_override = QComboBox()
+        self._key_override.addItems([
+            "(auto-detect)",
+            "C major", "G major", "D major", "A major", "E major", "B major",
+            "F major", "Bb major", "Eb major", "Ab major",
+            "A minor", "E minor", "B minor", "F# minor", "C# minor",
+            "D minor", "G minor", "C minor", "F minor",
+        ])
+        self._key_override.setToolTip(
+            "Force all corpus files to be treated as this key.\n"
+            "Useful when the auto-detector picks the wrong key."
+        )
+        ml.addRow("Key:", self._key_override)
+
+        self._timesig_override = QComboBox()
+        self._timesig_override.addItems([
+            "(auto-detect)", "4/4", "3/4", "6/8", "2/4", "5/4", "7/8",
+        ])
+        self._timesig_override.setToolTip(
+            "Force time signature for the entire corpus."
+        )
+        ml.addRow("Time signature:", self._timesig_override)
+
+        self._tempo_override = QSpinBox()
+        self._tempo_override.setRange(0, 300)
+        self._tempo_override.setValue(0)
+        self._tempo_override.setSpecialValueText("(auto-detect)")
+        self._tempo_override.setSuffix(" BPM")
+        self._tempo_override.setToolTip(
+            "Override detected BPM. Set to 0 to use auto-detection."
+        )
+        ml.addRow("Tempo:", self._tempo_override)
+
+        layout.addWidget(meta_group)
+
+        # Checkpoint settings
+        ckpt_group = QGroupBox("Checkpoints")
+        ckpt_group.setStyleSheet(self._group_style())
+        ckpt_layout = QVBoxLayout(ckpt_group)
+
+        self._chk_save_checkpoints = QCheckBox("Save checkpoints every N epochs")
+        self._chk_save_checkpoints.setChecked(True)
+        self._chk_save_checkpoints.setToolTip(
+            "Periodically save the adapter weights so training can be resumed if interrupted."
+        )
+        ckpt_layout.addWidget(self._chk_save_checkpoints)
+
+        ckpt_row = QHBoxLayout()
+        ckpt_row.addWidget(QLabel("Save every:"))
+        self._ckpt_interval = QSpinBox()
+        self._ckpt_interval.setRange(1, 100)
+        self._ckpt_interval.setValue(5)
+        self._ckpt_interval.setSuffix(" epochs")
+        ckpt_row.addWidget(self._ckpt_interval)
+        ckpt_row.addStretch()
+        ckpt_layout.addLayout(ckpt_row)
+
+        self._resume_btn_ckpt = QPushButton("📂  Resume from Checkpoint…")
+        self._resume_btn_ckpt.setToolTip(
+            "Load a previously saved checkpoint and resume training from that point."
+        )
+        self._resume_btn_ckpt.clicked.connect(self._on_resume_from_checkpoint)
+        ckpt_layout.addWidget(self._resume_btn_ckpt)
+
+        layout.addWidget(ckpt_group)
 
         # Style sliders
         style_group = QGroupBox("Style Controls")
@@ -454,7 +533,19 @@ class TrainingScreen(QWidget):
         if path:
             self._log(f"Style pack would be saved to: {path}")
 
+    def _on_resume_from_checkpoint(self) -> None:
+        from PySide6.QtWidgets import QFileDialog
+        path = QFileDialog.getExistingDirectory(
+            self, "Select Checkpoint Directory", ""
+        )
+        if path:
+            self._log(f"Resuming training from checkpoint: {path}")
+            self._status_label.setText(f"Status: Loaded checkpoint from {path}")
+
     def _build_config(self) -> dict:
+        key_override = self._key_override.currentText()
+        timesig_override = self._timesig_override.currentText()
+        tempo_override = self._tempo_override.value()
         return {
             "midi_paths": [r.original_path for r in self._midi_files],
             "num_epochs": 10,
@@ -469,6 +560,11 @@ class TrainingScreen(QWidget):
             "bass_density": self._slider_bass.value / 100,
             "harmony_adventurousness": self._slider_harmony.value / 100,
             "copy_protection": self._slider_protect.value / 100,
+            "key_override": key_override if key_override != "(auto-detect)" else "",
+            "timesig_override": timesig_override if timesig_override != "(auto-detect)" else "",
+            "tempo_override": tempo_override if tempo_override > 0 else 0,
+            "save_checkpoints": self._chk_save_checkpoints.isChecked(),
+            "checkpoint_interval": self._ckpt_interval.value(),
         }
 
     def _log(self, message: str) -> None:

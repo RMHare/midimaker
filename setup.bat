@@ -70,7 +70,7 @@ echo   pip upgraded.
 
 echo   Installing PyTorch with CUDA support...
 echo   (Attempting CUDA 12.1 build for NVIDIA GPUs)
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 --quiet
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 --no-cache-dir --quiet
 if errorlevel 1 (
     echo.
     echo   CUDA PyTorch install failed; falling back to default PyTorch...
@@ -85,6 +85,28 @@ if errorlevel 1 (
     )
 )
 echo   PyTorch installed.
+
+echo   Verifying CUDA support in installed PyTorch...
+python -c "import torch; cv=getattr(torch.version,'cuda',None); print(f'  PyTorch {torch.__version__}, CUDA: {cv if cv else \"NOT available\"}'); exit(0 if cv else 1)"
+if errorlevel 1 (
+    echo.
+    echo   WARNING: PyTorch was installed WITHOUT CUDA support.
+    echo   Attempting reinstall with CUDA 12.1...
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 --no-cache-dir --force-reinstall --quiet
+    python -c "import torch; cv=getattr(torch.version,'cuda',None); print(f'  PyTorch {torch.__version__}, CUDA: {cv if cv else \"NOT available\"}'); exit(0 if cv else 1)"
+    if errorlevel 1 (
+        echo.
+        echo   *** CUDA PyTorch could not be installed. ***
+        echo   Possible causes:
+        echo     - No NVIDIA GPU in this machine
+        echo     - NVIDIA drivers are not installed or are outdated
+        echo     - Python version is not supported by the CUDA PyTorch build
+        echo   The application will run in CPU-only mode.
+        echo.
+    ) else (
+        echo   CUDA PyTorch installed successfully on retry.
+    )
+)
 
 echo   Installing remaining requirements (this may take several minutes)...
 pip install -r requirements.txt

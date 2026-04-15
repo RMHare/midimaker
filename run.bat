@@ -43,10 +43,11 @@ if %EXIT_CODE% neq 0 (
     echo ============================================================
     echo.
     echo Possible causes:
-    echo  - A required dependency is missing: run setup.bat to reinstall
-    echo  - A Python error occurred: check logs\midimaker_*.log for details
+    echo  - A Python error occurred: check the log files for details
+    echo    Logs: %%USERPROFILE%%\.midimaker\logs\
     echo  - GPU driver issue: the app will fall back to CPU automatically
+    echo  - If dependencies are missing, re-run setup.bat to reinstall
     echo.
-    echo For support, include the log file from the logs\ folder.
+    echo For support, include the log file from the logs folder.
     pause
 )

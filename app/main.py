@@ -224,7 +224,14 @@ def _check_cuda() -> str:
             return f"CUDA available: {name}"
         if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             return "Apple MPS available"
-        return "No GPU — CPU only"
+        # Distinguish CPU-only build from driver/GPU absence
+        cuda_version = getattr(getattr(torch, "version", None), "cuda", None)
+        if not cuda_version:
+            return (
+                "No GPU — PyTorch was installed without CUDA support. "
+                "Re-run setup.bat to install the CUDA-enabled build."
+            )
+        return f"No GPU detected (PyTorch CUDA {cuda_version} present — check drivers)"
     except ImportError:
         return "PyTorch not installed"
 

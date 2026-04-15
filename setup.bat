@@ -68,7 +68,25 @@ if errorlevel 1 (
 python -m pip install --upgrade pip --quiet
 echo   pip upgraded.
 
-echo   Installing requirements (this may take several minutes)...
+echo   Installing PyTorch with CUDA support...
+echo   (Attempting CUDA 12.1 build for NVIDIA GPUs)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 --quiet
+if errorlevel 1 (
+    echo.
+    echo   CUDA PyTorch install failed; falling back to default PyTorch...
+    echo   (GPU acceleration will NOT be available)
+    pip install torch torchvision torchaudio --quiet
+    if errorlevel 1 (
+        echo.
+        echo ERROR: PyTorch installation failed.
+        echo Check your internet connection and try again.
+        pause
+        exit /b 1
+    )
+)
+echo   PyTorch installed.
+
+echo   Installing remaining requirements (this may take several minutes)...
 pip install -r requirements.txt
 if errorlevel 1 (
     echo.

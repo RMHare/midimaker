@@ -84,6 +84,18 @@ def get_device() -> str:
         if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             logger.info("Apple MPS device detected.")
             return "mps"
+        # Distinguish "no CUDA build" from "no GPU found"
+        cuda_version = getattr(getattr(torch, "version", None), "cuda", None)
+        if not cuda_version:
+            logger.warning(
+                "PyTorch installed WITHOUT CUDA support. "
+                "Reinstall with: pip install torch --index-url "
+                "https://download.pytorch.org/whl/cu121"
+            )
+        else:
+            logger.info(
+                f"PyTorch has CUDA {cuda_version} but no GPU detected by the driver."
+            )
     except ImportError:
         pass
     logger.info("No GPU detected; using CPU.")

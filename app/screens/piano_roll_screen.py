@@ -277,6 +277,17 @@ class PianoRollWidget(QWidget):
             n.selected = True
         self.update()
 
+    def set_velocity_for_selected(self, velocity: int) -> None:
+        """Set velocity on all selected notes."""
+        selected = [n for n in self._notes if n.selected]
+        if not selected:
+            return
+        self._push_undo()
+        for note in selected:
+            note.velocity = max(1, min(127, velocity))
+        self.notes_changed.emit()
+        self.update()
+
     def delete_selected(self) -> None:
         before = len(self._notes)
         self._push_undo()
@@ -1045,13 +1056,7 @@ class PianoRollScreen(QWidget):
     def _on_velocity_changed(self, value: int) -> None:
         """Apply velocity to all selected notes and update the label."""
         self._vel_value_label.setText(str(value))
-        selected = [n for n in self.roll.get_notes() if n.selected]
-        if selected:
-            self.roll._push_undo()
-            for note in selected:
-                note.velocity = value
-            self.roll.notes_changed.emit()
-            self.roll.update()
+        self.roll.set_velocity_for_selected(value)
 
     def _on_load(self) -> None:
         path, _ = QFileDialog.getOpenFileName(

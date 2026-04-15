@@ -122,7 +122,10 @@ class SymbolicMusicModel:
                 )
                 self.model = GPT2LMHeadModel(self.hf_config)
                 logger.info(
-                    "Initialised AMT-equivalent model (8-layer, 512-dim, 8-head) "
+                    f"Initialised AMT-equivalent model "
+                    f"({_AMT_DEFAULT_CONFIG['n_layer']}-layer, "
+                    f"{_AMT_DEFAULT_CONFIG['n_embd']}-dim, "
+                    f"{_AMT_DEFAULT_CONFIG['n_head']}-head) "
                     "with random weights."
                 )
 

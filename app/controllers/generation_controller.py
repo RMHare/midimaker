@@ -220,6 +220,106 @@ class GenerationController(QObject):
         return task_id
 
     # ------------------------------------------------------------------
+    # Genetic sequencer
+    # ------------------------------------------------------------------
+
+    def evolve_genetic(
+        self,
+        key: str = "C major",
+        bpm: float = 120.0,
+        bars: int = 8,
+        time_sig: tuple = (4, 4),
+        population_size: int = 12,
+        generations: int = 20,
+        mutation_rate: float = 0.25,
+        elite_count: int = 2,
+        tournament_k: int = 3,
+        progress_callback=None,
+    ) -> str:
+        """
+        Run a full genetic evolution in the background and return the task_id.
+
+        The ``generation_complete`` signal fires with
+        ``(task_id, [GenerationResult])`` when finished.
+
+        Parameters
+        ----------
+        key : str
+            Musical key / scale, e.g. ``"C major"``.
+        bpm : float
+            Tempo in BPM.
+        bars : int
+            Number of bars per evolved sequence.
+        time_sig : tuple[int, int]
+            Time signature numerator and denominator.
+        population_size : int
+            Number of individuals to maintain.
+        generations : int
+            Number of GA generations to run.
+        mutation_rate : float
+            Per-operator mutation probability.
+        elite_count : int
+            Number of top individuals preserved unchanged each generation.
+        tournament_k : int
+            Tournament selection pool size.
+        progress_callback : callable | None
+            Optional ``(step, total, message)`` callback forwarded to the
+            sequencer's evolve loop.
+        """
+        task_id = self._next_task_id("genetic")
+
+        def _run():
+            try:
+                from generation.genetic_sequencer import GeneticSequencer
+                from generation.base import GenerationResult
+
+                seq = GeneticSequencer(
+                    key=key,
+                    bpm=bpm,
+                    bars=bars,
+                    time_sig=time_sig,
+                    mutation_rate=mutation_rate,
+                    elite_count=elite_count,
+                    tournament_k=tournament_k,
+                )
+
+                def _cb(gen, total, msg):
+                    pct = int(gen / max(1, total) * 100)
+                    self._signals.progress.emit(task_id, pct, msg)
+                    if progress_callback:
+                        try:
+                            progress_callback(gen, total, msg)
+                        except Exception:
+                            pass
+
+                population, best = seq.evolve(
+                    population_size=population_size,
+                    generations=generations,
+                    progress_callback=_cb,
+                )
+
+                results = [
+                    GenerationResult(
+                        midi_piece=ind.piece,
+                        score=round(ind.adjusted_fitness(), 3),
+                        copying_risk=0.0,
+                        notes=f"Genetic gen {ind.generation_born}  fitness={ind.fitness:.3f}",
+                        candidate_index=i,
+                    )
+                    for i, ind in enumerate(
+                        sorted(population, key=lambda x: x.adjusted_fitness(), reverse=True)
+                    )
+                ]
+                return results
+
+            except Exception as exc:
+                logger.warning(f"Genetic evolution failed: {exc}")
+                return []
+
+        self._dispatch(task_id, _run)
+        return task_id
+
+    # ------------------------------------------------------------------
     # Stub fallback (used when model weights are unavailable)
     # ------------------------------------------------------------------
 

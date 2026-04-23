@@ -40,6 +40,7 @@ from app.screens.bassline_screen import BasslineScreen
 from app.screens.review_screen import ReviewScreen
 from app.screens.settings_screen import SettingsScreen
 from app.screens.logs_screen import LogsScreen
+from app.screens.genetic_screen import GeneticScreen
 
 from app.controllers.project_controller import ProjectController
 from app.controllers.generation_controller import GenerationController
@@ -53,9 +54,10 @@ TAB_PIANO_ROLL = 2
 TAB_CONTINUATION = 3
 TAB_MOTIF = 4
 TAB_BASSLINE = 5
-TAB_REVIEW = 6
-TAB_SETTINGS = 7
-TAB_LOGS = 8
+TAB_GENETIC = 6
+TAB_REVIEW = 7
+TAB_SETTINGS = 8
+TAB_LOGS = 9
 
 
 class MainWindow(QMainWindow):
@@ -111,6 +113,7 @@ class MainWindow(QMainWindow):
         self._continuation = ContinuationScreen()
         self._motif = MotifScreen()
         self._bassline = BasslineScreen()
+        self._genetic = GeneticScreen()
         self._review = ReviewScreen()
         self._settings = SettingsScreen()
         self._logs = LogsScreen()
@@ -122,6 +125,7 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(self._continuation, "➡️  Continue")
         self._tabs.addTab(self._motif,        "🎵  Motifs")
         self._tabs.addTab(self._bassline,     "🎸  Bassline")
+        self._tabs.addTab(self._genetic,      "🧬  Genetic")
         self._tabs.addTab(self._review,       "⭐  Review")
         self._tabs.addTab(self._settings,     "⚙️  Settings")
         self._tabs.addTab(self._logs,         "📋  Logs")
@@ -378,6 +382,9 @@ class MainWindow(QMainWindow):
             )
         )
 
+        # --- Genetic screen → Piano Roll ---
+        self._genetic.best_inserted.connect(self._on_genetic_piece_inserted)
+
     # ------------------------------------------------------------------
     # Project slots
     # ------------------------------------------------------------------
@@ -429,6 +436,13 @@ class MainWindow(QMainWindow):
         )
         task_id = self._gen_ctrl.inpaint(request)
         self._logs.append_log(f"[INPAINT] Task {task_id} started")
+
+    @Slot(object)
+    def _on_genetic_piece_inserted(self, piece) -> None:
+        """Load a genetically-evolved piece into the Piano Roll and switch to it."""
+        self._piano_roll.load_piece(piece)
+        self._tabs.setCurrentIndex(TAB_PIANO_ROLL)
+        self._logs.append_log("[GENETIC] Evolved piece inserted into Piano Roll.")
 
     # ------------------------------------------------------------------
     # Menu / toolbar slots

@@ -63,13 +63,13 @@ from core.midi_representation import (
 
 # Semitone intervals for common scales (relative to root)
 _SCALE_INTERVALS: dict[str, list[int]] = {
-    "major":         [0, 2, 4, 5, 7, 9, 11],
-    "natural_minor": [0, 2, 3, 5, 7, 8, 10],
-    "harmonic_minor":[0, 2, 3, 5, 7, 8, 11],
-    "dorian":        [0, 2, 3, 5, 7, 9, 10],
-    "mixolydian":    [0, 2, 4, 5, 7, 9, 10],
-    "pentatonic":    [0, 2, 4, 7, 9],
-    "blues":         [0, 3, 5, 6, 7, 10],
+    "major":          [0, 2, 4, 5, 7, 9, 11],
+    "natural_minor":  [0, 2, 3, 5, 7, 8, 10],
+    "harmonic_minor": [0, 2, 3, 5, 7, 8, 11],
+    "dorian":         [0, 2, 3, 5, 7, 9, 10],
+    "mixolydian":     [0, 2, 4, 5, 7, 9, 10],
+    "pentatonic":     [0, 2, 4, 7, 9],
+    "blues":          [0, 3, 5, 6, 7, 10],
 }
 
 _NOTE_NAME_TO_PC: dict[str, int] = {
@@ -79,6 +79,7 @@ _NOTE_NAME_TO_PC: dict[str, int] = {
 }
 
 _DEFAULT_TICKS_PER_BEAT = 480
+_MIN_NOTE_COUNT = 4   # minimum note count below which deletion is suppressed
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +98,7 @@ class SequencerIndividual:
     fitness: float = 0.0
     interactive_boost: float = 0.0   # added by the user via "Boost" button
     generation_born: int = 0
+    evaluated: bool = False          # True once fitness has been computed
 
     def adjusted_fitness(self) -> float:
         """Return fitness + any interactive boost (capped at 1.0)."""
@@ -337,6 +339,7 @@ class GeneticSequencer:
         fitness += 0.15 * self._contour_variety(notes)
 
         individual.fitness = max(0.0, min(1.0, fitness))
+        individual.evaluated = True
         return individual.fitness
 
     def evaluate_population(
@@ -347,7 +350,7 @@ class GeneticSequencer:
         """Evaluate all individuals that have not yet been scored."""
         total = len(population)
         for i, ind in enumerate(population):
-            if ind.fitness == 0.0:
+            if not ind.evaluated:
                 self.evaluate(ind)
             if progress_callback:
                 try:
@@ -489,13 +492,14 @@ class GeneticSequencer:
             notes = self._mutate_rhythm(notes)
         if random.random() < self.mutation_rate:
             notes = self._mutate_insert(notes)
-        if random.random() < self.mutation_rate and len(notes) > 4:
+        if random.random() < self.mutation_rate and len(notes) > _MIN_NOTE_COUNT:
             notes = self._mutate_delete(notes)
 
         # Rebuild piece with mutated notes
         if child.piece.tracks:
             child.piece.tracks[0].notes = sorted(notes, key=lambda n: n.onset_ticks)
         child.fitness = 0.0
+        child.evaluated = False
         child.interactive_boost = 0.0
         return child
 
@@ -573,8 +577,8 @@ class GeneticSequencer:
         return notes
 
     def _mutate_delete(self, notes: list[Note]) -> list[Note]:
-        """Remove one random note (only if count > 4 to keep content)."""
-        if len(notes) <= 4:
+        """Remove one random note (only if count > _MIN_NOTE_COUNT to keep content)."""
+        if len(notes) <= _MIN_NOTE_COUNT:
             return notes
         i = random.randrange(len(notes))
         return notes[:i] + notes[i + 1:]

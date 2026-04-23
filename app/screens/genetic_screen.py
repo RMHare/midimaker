@@ -156,7 +156,7 @@ class _IndividualTile(QFrame):
     # Public API
     # ------------------------------------------------------------------
 
-    def update_individual(self, individual, rank: int) -> None:
+    def update_individual(self, individual: "SequencerIndividual", rank: int) -> None:
         """Refresh the tile from a SequencerIndividual."""
         self._rank_label.setText(f"#{rank}")
         self._gen_label.setText(f"gen {individual.generation_born}")
@@ -281,6 +281,7 @@ class GeneticScreen(QWidget):
         self._population: list = []
         self._sequencer = None
         self._current_gen: int = 0
+        self._target_gens: int = 0      # total generations requested on Start
         self._worker: Optional[_EvoWorker] = None
         self._signals = _EvoSignals()
         self._tiles: list[_IndividualTile] = []
@@ -553,7 +554,7 @@ class GeneticScreen(QWidget):
     # Sequencer factory
     # ------------------------------------------------------------------
 
-    def _make_sequencer(self):
+    def _make_sequencer(self) -> "GeneticSequencer":
         from generation.genetic_sequencer import GeneticSequencer
         ts_text = self._timesig_combo.currentText()
         num, den = (int(x) for x in ts_text.split("/"))
@@ -579,7 +580,8 @@ class GeneticScreen(QWidget):
         self._rebuild_tiles(self._population)
         self._log.clear()
         self._log.append("▶ Evolution started — initialised population.")
-        self._run_worker(self._gens_spin.value())
+        self._target_gens = self._gens_spin.value()
+        self._run_worker(self._target_gens)
 
     @Slot()
     def _on_step(self) -> None:
@@ -603,6 +605,7 @@ class GeneticScreen(QWidget):
         self._on_stop()
         self._population = []
         self._current_gen = 0
+        self._target_gens = 0
         self._sequencer = None
         self._rebuild_tiles([])
         self._gen_info.setText("Generation: –   Best fitness: –")
@@ -622,8 +625,11 @@ class GeneticScreen(QWidget):
     def _on_generation_done(self, gen_number: int, population: list, best_fitness: float) -> None:
         self._population = population
         self._current_gen = gen_number
-        total = self._gens_spin.value()
-        self._progress.setValue(int(gen_number / max(1, total) * 100))
+        # Show progress relative to the target set at Start; for Step, update target
+        if gen_number > self._target_gens:
+            self._target_gens = gen_number
+        pct = int(gen_number / max(1, self._target_gens) * 100)
+        self._progress.setValue(pct)
         self._gen_info.setText(
             f"Generation: {gen_number}   Best fitness: {best_fitness:.3f}"
         )
@@ -818,7 +824,7 @@ class _FlowLayout(QVBoxLayout):
         super().addStretch()
 
 
-def _clear_layout(layout) -> None:
+def _clear_layout(layout: "QVBoxLayout | QHBoxLayout") -> None:
     while layout.count():
         item = layout.takeAt(0)
         if item.widget():

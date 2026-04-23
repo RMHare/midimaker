@@ -228,7 +228,7 @@ class GenerationController(QObject):
         key: str = "C major",
         bpm: float = 120.0,
         bars: int = 8,
-        time_sig: tuple = (4, 4),
+        time_sig: "tuple[int, int]" = (4, 4),
         population_size: int = 12,
         generations: int = 20,
         mutation_rate: float = 0.25,
